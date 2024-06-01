@@ -5,13 +5,14 @@ from sys import exit
 
 pygame.init()
 
+health = 5
 score = 0
 wave = 0
 enemies_to_spawn = 0
 enemies_spawned = 0
 time_since_last_spawn = 0
 spawn_timer = 0
-
+x = 0
 running = True
 
 class Player(pygame.sprite.Sprite):
@@ -37,14 +38,17 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=pos)
 
     def update(self, bullets_group):
-        global score, running
+        global score, health, running
         self.rect.x -= 1
         bullet_hits = pygame.sprite.spritecollide(self, bullets_group, True)
         if bullet_hits:
             self.kill()
             score += 1
         if self.rect.colliderect(end_point_rect):
-            running = False
+            self.kill()  # Ensure the enemy is removed
+            health -= 1
+            if health <= 0:
+                running = False
 
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, pos, angle):
@@ -66,6 +70,9 @@ end_point = pygame.Surface((50, 650))
 end_point.fill((75, 75, 255))
 end_point_rect = end_point.get_rect(topleft=(0, 0))
 
+heart = pygame.image.load("graphics/health.png").convert_alpha()
+heart = pygame.transform.scale(heart, (45, 45))
+
 player = Player()
 player_group = pygame.sprite.GroupSingle(player)
 
@@ -77,7 +84,7 @@ font_ = pygame.font.SysFont(None, 60)
 font__ = pygame.font.SysFont(None, 100)
 
 end_text = font_.render('Game Over!', True, 'Red')
-end_text_rect = end_text.get_rect(center = (325, 100))
+end_text_rect = end_text.get_rect(center=(325, 100))
 
 spawn_interval = 1000  
 enemy_spawn_interval = 100  
@@ -87,13 +94,16 @@ clock = pygame.time.Clock()
 def start_new_wave():
     global wave, enemies_to_spawn, enemies_spawned, time_since_last_spawn
     wave += 1
-    enemies_to_spawn = random.randint(wave*2, wave*4)
+    enemies_to_spawn = random.randint(wave * 2, wave * 4)
     enemies_spawned = 0
     time_since_last_spawn = 0
 
 start_new_wave()
 
 while True:
+    if health <= 0:
+        running = False
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -112,14 +122,16 @@ while True:
             screen.fill((255, 255, 255))
             screen.blit(end_text, end_text_rect)
             score_text_end = font__.render(f'Final Score: {score}', True, (255, 0, 0))
-            score_text_end_rect = score_text_end.get_rect(center=(375, 300))
+            score_text_end_rect = score_text_end.get_rect(center=(325, 300))
             screen.blit(score_text_end, score_text_end_rect)
             pygame.display.update()
             continue
 
     if running:
+        x = 200
+
         wave_text = font.render(f'Wave: {wave}', True, (255, 255, 255))
-        wave_text_rect = wave_text.get_rect(center=(200, 30))
+        wave_text_rect = wave_text.get_rect(center=(100, 30))
 
         score_text = font.render(f'Score: {score}', True, (255, 255, 255))
         score_text_rect = score_text.get_rect(center=(500, 30))
@@ -133,6 +145,10 @@ while True:
         screen.blit(end_point, end_point_rect)
         screen.blit(wave_text, wave_text_rect)
         screen.blit(score_text, score_text_rect)
+
+        for _ in range(health):
+            screen.blit(heart, (x, 15))
+            x += 45
         player_group.draw(screen)
 
         enemies_group.update(bullets_group)
