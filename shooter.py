@@ -83,7 +83,7 @@ class Boss(pygame.sprite.Sprite):
             self.health -= 1
         grenade_hits = pygame.sprite.spritecollide(self, grenades_group, True)
         if grenade_hits:
-            self.health -= 5  # Adjust damage as needed
+            self.health -= 5  
             explosion = ExplosionGrenade(self.rect.center)
             explosions_group.add(explosion)
         if self.health <= 0:
@@ -125,7 +125,7 @@ class Grenade(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.Vector2(pos)
         self.vel = pygame.Vector2(int(screen_width * 0.01), 0).rotate(angle)
-        self.lifetime = 500  # Adjust lifetime as needed
+        self.lifetime = 500  
 
     def update(self):
         if not paused:
@@ -150,7 +150,7 @@ class Grenade(pygame.sprite.Sprite):
                 explosions_group.add(explosion)
         for boss in bosses_group:
             if pygame.sprite.collide_circle_ratio(0.5)(self, boss):
-                boss.health -= 5  # Adjust damage as needed
+                boss.health -= 5   
                 if boss.health <= 0:
                     boss.kill()
                     global boss_spawned
@@ -179,14 +179,14 @@ class ExplosionGrenade(pygame.sprite.Sprite):
         self.image = pygame.image.load("graphics/explosion.png").convert_alpha()
         self.image = pygame.transform.scale(self.image, (int(screen_width * 0.1), int(screen_width * 0.1)))
         self.rect = self.image.get_rect(center=pos)
-        self.lifetime = 30  # Adjust lifetime as needed
+        self.lifetime = 30  
 
     def update(self):
         if not paused:
             self.lifetime -= 1
             if self.lifetime <= 0:
                 self.kill()
-        # Check for collision with enemies
+        
         for enemy in enemies_group:
             if pygame.sprite.collide_rect(self, enemy):
                 enemy.kill()
@@ -254,7 +254,7 @@ while True:
                         pygame.quit()
                         exit()
                     rel_x, rel_y = mouse_pos[0] - player.rect.centerx, mouse_pos[1] - player.rect.centery
-                    angle = math.degrees(math.atan2(-rel_y, rel_x))
+                    angle = math.degrees(math.atan2(rel_y, rel_x))
                     bullet = Bullet(player.rect.center, angle)
                     bullets_group.add(bullet)
             
