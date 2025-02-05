@@ -15,12 +15,23 @@ pygame.display.set_caption("Shooter")
 explosion = False
 health = 7
 score = 0
-wave = 0
+wave = 1
 enemies_to_spawn = 0
 enemies_spawned = 0
 time_since_last_spawn = 0
 spawn_timer = 0
 running = True
+
+
+fire_rate_upgrade = 1  
+pierce_upgrade = 1  
+grenade_fire_rate_upgrade = 1  
+bullet_damage_upgrade = 1  
+grenade_unlocked = False  
+
+
+auto_fire = False
+last_shot_time = 0
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -41,14 +52,18 @@ class Enemy(pygame.sprite.Sprite):
         super().__init__()
         self.image = pygame.image.load("graphics/enemy.png").convert_alpha()
         self.image = pygame.transform.scale(self.image, (int(screen_width * 0.05), int(screen_width * 0.015)))
-        self.rect = self.image.get_rect(center=pos)
+        self.rect = self.image.get_rect(center = pos)
 
     def update(self, bullets_group, grenades_group):
         global score, health, running
         if not paused:
             self.rect.x -= int(screen_width * 0.002)
-        bullet_hits = pygame.sprite.spritecollide(self, bullets_group, True)
+        bullet_hits = pygame.sprite.spritecollide(self, bullets_group, False)
         if bullet_hits:
+            for bullet in bullet_hits:
+                bullet.pierce -= 1
+                if bullet.pierce <= 0:
+                    bullet.kill()
             self.kill()
             score += 1
             explosion = ExplosionEnemy(self.rect.center)
@@ -80,10 +95,10 @@ class Boss(pygame.sprite.Sprite):
             self.rect.x -= int(screen_width * 0.001)
         bullet_hits = pygame.sprite.spritecollide(self, bullets_group, True)
         if bullet_hits:
-            self.health -= 1
+            self.health -= bullet_damage_upgrade
         grenade_hits = pygame.sprite.spritecollide(self, grenades_group, True)
         if grenade_hits:
-            self.health -= 5  
+            self.health -= 7
             explosion = ExplosionGrenade(self.rect.center)
             explosions_group.add(explosion)
         if self.health <= 0:
@@ -109,6 +124,7 @@ class Bullet(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=pos)
         self.pos = pygame.Vector2(pos)
         self.vel = pygame.Vector2(int(screen_width * 0.01), 0).rotate(angle)
+        self.pierce = pierce_upgrade
 
     def update(self):
         if not paused:
@@ -158,7 +174,6 @@ class Grenade(pygame.sprite.Sprite):
                     score += boss.health
                     start_new_wave()
 
-
 class ExplosionEnemy(pygame.sprite.Sprite):
     def __init__(self, pos):
         super().__init__()
@@ -192,8 +207,6 @@ class ExplosionGrenade(pygame.sprite.Sprite):
                 enemy.kill()
                 explosion = ExplosionEnemy(enemy.rect.center)
                 explosions_group.add(explosion)
-
-
 
 close_button = pygame.Surface((int(screen_width * 0.04), int(screen_width * 0.04)))
 close_button.fill((255, 0, 0))
@@ -238,6 +251,43 @@ def start_new_wave():
 def take_screenshot():
     pygame.image.save(screen, "screenshot.png")
 
+def show_upgrade_menu():
+    global fire_rate_upgrade, pierce_upgrade, grenade_fire_rate_upgrade, bullet_damage_upgrade, grenade_unlocked
+    upgrade_menu = True
+    while upgrade_menu:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1:
+                    fire_rate_upgrade += 1
+                    upgrade_menu = False
+                elif event.key == pygame.K_2:
+                    pierce_upgrade += 1
+                    upgrade_menu = False
+                elif event.key == pygame.K_3:
+                    grenade_fire_rate_upgrade += 1
+                    if not grenade_unlocked:
+                        grenade_unlocked = True
+                    upgrade_menu = False
+                elif event.key == pygame.K_4:
+                    bullet_damage_upgrade += 1
+                    upgrade_menu = False
+
+        screen.fill((0, 0, 0))
+        upgrade_text = font_.render("Choose an upgrade:", True, (255, 255, 255))
+        screen.blit(upgrade_text, (screen_width // 2 - 150, screen_height // 2 - 100))
+        upgrade_text1 = font.render("1. Fire Rate", True, (255, 255, 255))
+        screen.blit(upgrade_text1, (screen_width // 2 - 150, screen_height // 2 - 50))
+        upgrade_text2 = font.render("2. Pierce", True, (255, 255, 255))
+        screen.blit(upgrade_text2, (screen_width // 2 - 150, screen_height // 2))
+        upgrade_text3 = font.render("3. Grenade Fire Rate", True, (255, 255, 255))
+        screen.blit(upgrade_text3, (screen_width // 2 - 150, screen_height // 2 + 50))
+        upgrade_text4 = font.render("4. Bullet Damage", True, (255, 255, 255))
+        screen.blit(upgrade_text4, (screen_width // 2 - 150, screen_height // 2 + 100))
+        pygame.display.update()
+
 start_new_wave()
 
 while True:
@@ -253,13 +303,16 @@ while True:
                     if close_button_rect.collidepoint(mouse_pos):
                         pygame.quit()
                         exit()
-                    rel_x, rel_y = mouse_pos[0] - player.rect.centerx, mouse_pos[1] - player.rect.centery
-                    angle = math.degrees(math.atan2(rel_y, rel_x))
-                    bullet = Bullet(player.rect.center, angle)
-                    bullets_group.add(bullet)
+                    current_time = pygame.time.get_ticks()
+                    if current_time - last_shot_time >= 300 / fire_rate_upgrade:
+                        rel_x, rel_y = mouse_pos[0] - player.rect.centerx, mouse_pos[1] - player.rect.centery
+                        angle = math.degrees(math.atan2(rel_y, rel_x))
+                        bullet = Bullet(player.rect.center, angle)
+                        bullets_group.add(bullet)
+                        last_shot_time = current_time
             
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
+                if event.key == pygame.K_SPACE and grenade_unlocked:
                     rel_x, rel_y = mouse_pos[0] - player.rect.centerx, mouse_pos[1] - player.rect.centery
                     angle = math.degrees(math.atan2(-rel_y, -rel_x))
                     angle += 180
@@ -271,6 +324,12 @@ while True:
 
                 if event.key == pygame.K_s:
                     take_screenshot()
+
+                if event.key == pygame.K_a:
+                    if auto_fire: 
+                        auto_fire = False
+                    else:
+                        auto_fire = True
 
         else:
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -353,6 +412,16 @@ while True:
                 if spawn_timer >= spawn_interval:
                     start_new_wave()
                     spawn_timer = 0
+                    show_upgrade_menu()
+
+ 
+        if auto_fire and not paused:
+            current_time = pygame.time.get_ticks()
+            if current_time - last_shot_time >= 500 / fire_rate_upgrade:
+                rel_x, rel_y = mouse_pos[0] - player.rect.centerx, mouse_pos[1] - player.rect.centery
+                angle = math.degrees(math.atan2(rel_y, rel_x))
+                bullet = Bullet(player.rect.center, angle)
+                bullets_group.add(bullet)
+                last_shot_time = current_time
 
     clock.tick(60)
-
