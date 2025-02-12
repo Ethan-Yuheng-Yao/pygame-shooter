@@ -21,14 +21,16 @@ enemies_spawned = 0
 time_since_last_spawn = 0
 spawn_timer = 0
 running = True
-
-
+enemy_health = 1
+powerup_active = False  
+powerup_start_time = 0  
+powerup_duration = 3000 
 fire_rate_upgrade = 1  
 pierce_upgrade = 1  
 grenade_fire_rate_upgrade = 1  
 bullet_damage_upgrade = 1  
 grenade_unlocked = False  
-
+powerup_already = False
 
 auto_fire = False
 last_shot_time = 0
@@ -46,14 +48,49 @@ class Player(pygame.sprite.Sprite):
         angle = (math.degrees(math.atan2(-rel_y, rel_x))) - 90
         self.image = pygame.transform.rotate(self.original_image, angle)
         self.rect = self.image.get_rect(center=self.rect.center)
+class PowerUp(pygame.sprite.Sprite):
+    def __init__(self, pos):
+        super().__init__()
+        self.image = pygame.image.load("graphics/powerup.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (int(screen_width * 0.05), int(screen_width * 0.015)))
+        self.rect = self.image.get_rect(center=pos)
+        self.health = 1
+
+    def update(self, bullets_group, grenades_group):
+        global fire_rate_upgrade, health, powerup_active, powerup_start_time
+        if not paused:
+            self.rect.x -= int(screen_width * 0.002)  
+
+        bullet_hits = pygame.sprite.spritecollide(self, bullets_group, False)
+        if bullet_hits:
+            for bullet in bullet_hits:
+                bullet.pierce -= 1
+                if bullet.pierce <= 0:
+                    bullet.kill()
+            self.health -= bullet_damage_upgrade
+            if self.health <= 0:
+                self.kill()
+                fire_rate_upgrade *= 5
+                powerup_active = True  
+                powerup_start_time = pygame.time.get_ticks()  
+
+        grenade_hits = pygame.sprite.spritecollide(self, grenades_group, True)
+        if grenade_hits:
+            self.health -= 3
+            if self.health <= 0:
+                self.kill()
+                fire_rate_upgrade *= 5
+                powerup_active = True  
+                powerup_start_time = pygame.time.get_ticks()  
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, pos):
+    def __init__(self, pos, health):
         super().__init__()
         self.image = pygame.image.load("graphics/enemy.png").convert_alpha()
         self.image = pygame.transform.scale(self.image, (int(screen_width * 0.05), int(screen_width * 0.015)))
         self.rect = self.image.get_rect(center = pos)
-
+        self.health = health
+        
     def update(self, bullets_group, grenades_group):
         global score, health, running
         if not paused:
@@ -64,15 +101,66 @@ class Enemy(pygame.sprite.Sprite):
                 bullet.pierce -= 1
                 if bullet.pierce <= 0:
                     bullet.kill()
-            self.kill()
-            score += 1
-            explosion = ExplosionEnemy(self.rect.center)
-            explosions_group.add(explosion)
+               
+               
+
+            self.health -= bullet_damage_upgrade
+            if self.health <= 0: 
+                self.kill()
+                score += (wave/5) + 1
+                explosion = ExplosionEnemy(self.rect.center)
+                explosions_group.add(explosion)
+            
             
         grenade_hits = pygame.sprite.spritecollide(self, grenades_group, True)
         if grenade_hits:
-            self.kill()
-            score += 1
+            self.health -= 3
+            if self.health <= 0: 
+                self.kill()
+                score += 1
+            explosion = ExplosionGrenade(self.rect.center)
+            explosions_group.add(explosion)
+        if self.rect.colliderect(end_point_rect):
+            self.kill() 
+            health -= 1
+            if health <= 0:
+                running = False
+
+class TankEnemy(pygame.sprite.Sprite):
+    def __init__(self, pos, health):
+        super().__init__()
+        self.image = pygame.image.load("graphics/enemy.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (int(screen_width * 0.08), int(screen_width * 0.0235)))
+        self.rect = self.image.get_rect(center = pos)
+        self.health = health
+        
+    def update(self, bullets_group, grenades_group):
+        global score, health, running
+        if not paused:
+            self.rect.x -= int(screen_width * 0.001)
+        bullet_hits = pygame.sprite.spritecollide(self, bullets_group, False)
+        if bullet_hits:
+            for bullet in bullet_hits:
+                bullet.pierce -= 1
+                if bullet.pierce <= 0:
+                    bullet.kill()
+               
+               
+
+            self.health -= bullet_damage_upgrade
+            if self.health <= 0: 
+                self.kill()
+                score += (wave/2) + 1
+                explosion = ExplosionEnemy(self.rect.center)
+                explosions_group.add(explosion)
+            
+            
+        grenade_hits = pygame.sprite.spritecollide(self, grenades_group, True)
+        if grenade_hits:
+            self.health -= 3
+            if self.health <= 0: 
+                self.kill()
+                score += (wave/2) + 1
             explosion = ExplosionGrenade(self.rect.center)
             explosions_group.add(explosion)
         if self.rect.colliderect(end_point_rect):
@@ -130,6 +218,7 @@ class Bullet(pygame.sprite.Sprite):
         if not paused:
             self.pos += self.vel
             self.rect.center = self.pos
+            
         if self.rect.x > 2000:
             self.kill()
 
@@ -225,7 +314,9 @@ player = Player()
 player_group = pygame.sprite.GroupSingle(player)
 bosses_group = pygame.sprite.Group()
 bullets_group = pygame.sprite.Group()
+powerups_group = pygame.sprite.Group()
 enemies_group = pygame.sprite.Group()
+tankenemies_group = pygame.sprite.Group()
 grenades_group = pygame.sprite.Group()
 explosions_group = pygame.sprite.Group()
 
@@ -237,7 +328,7 @@ end_text = font_.render('Game Over!', True, 'Red')
 end_text_rect = end_text.get_rect(center=(screen_width // 2, screen_height // 4))
 
 spawn_interval = 10  
-enemy_spawn_interval = 1
+enemy_spawn_interval = 3
 
 clock = pygame.time.Clock()
 
@@ -265,6 +356,7 @@ def show_upgrade_menu():
                     upgrade_menu = False
                 elif event.key == pygame.K_2:
                     pierce_upgrade += 1
+                    bullet_damage_upgrade = bullet_damage_upgrade/1.5
                     upgrade_menu = False
                 elif event.key == pygame.K_3:
                     grenade_fire_rate_upgrade += 1
@@ -272,7 +364,7 @@ def show_upgrade_menu():
                         grenade_unlocked = True
                     upgrade_menu = False
                 elif event.key == pygame.K_4:
-                    bullet_damage_upgrade += 1
+                    bullet_damage_upgrade += 0.5
                     upgrade_menu = False
 
         screen.fill((0, 0, 0))
@@ -330,7 +422,11 @@ while True:
                         auto_fire = False
                     else:
                         auto_fire = True
-
+            if powerup_active:
+                powerup_current_time = pygame.time.get_ticks()
+                if (powerup_current_time - powerup_start_time) >= powerup_duration:
+                    fire_rate_upgrade = fire_rate_upgrade/5
+                    powerup_active = False
         else:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
@@ -377,9 +473,15 @@ while True:
 
         bosses_group.update(bullets_group, grenades_group)
         bosses_group.draw(screen)
-
+        
+        powerups_group.update(bullets_group, grenades_group)
+        powerups_group.draw(screen)
+        
         enemies_group.update(bullets_group, grenades_group)
         enemies_group.draw(screen)
+
+        tankenemies_group.update(bullets_group, grenades_group)
+        tankenemies_group.draw(screen)
 
         bullets_group.draw(screen)
         grenades_group.draw(screen)
@@ -390,25 +492,41 @@ while True:
         if not paused:
             if wave % 5 == 0 and wave != 0:
                 if not boss_spawned:
+                    enemy_spawn_interval += 2
+                    spawn_interval += 2
                     boss_start_pos = (screen_width, random.randint(15, screen_height - 15))
-                    boss_health = wave * 4
+                    boss_health = wave * 10
                     if boss_health < 20:
                         boss_health = 20
                     boss = Boss(boss_start_pos, (boss_health / 2))
                     bosses_group.add(boss)
                     boss_spawned = True
+                    enemy_health += 1
 
             elif enemies_spawned < enemies_to_spawn:
                 time_since_last_spawn += clock.get_time()
+                tank_chance = random.randint(1, 8)
+                if tank_chance == 1 and wave > 5:
+                    tank_start_pos = (screen_width, random.randint(15, screen_height - 15))
+                    tankenemy = TankEnemy(tank_start_pos, (enemy_health*(wave/5)) + 3)
+                    tankenemies_group.add(tankenemy)
+                if not powerup_already:
+                    powerup_chance = random.randint(1, 50)
+                    if powerup_chance == 1:
+                        powerup_already = True
+                        power_up_start_pos = (screen_width, random.randint(15, screen_height - 15))
+                        powerup = PowerUp(power_up_start_pos)
+                        powerups_group.add(powerup)
                 if time_since_last_spawn >= enemy_spawn_interval:
                     enemy_start_pos = (screen_width, random.randint(15, screen_height - 15))
-                    enemy = Enemy(enemy_start_pos)
+                    enemy = Enemy(enemy_start_pos, enemy_health)
                     enemies_group.add(enemy)
                     time_since_last_spawn = 0
                     enemies_spawned += 1
 
-            if len(enemies_group) == 0 and enemies_spawned >= enemies_to_spawn and not boss_spawned:
+            if len(enemies_group) == 0 and len(tankenemies_group) == 0 and enemies_spawned >= enemies_to_spawn and not boss_spawned:
                 spawn_timer += clock.get_time()
+                if powerup_already: powerup_already = False
                 if spawn_timer >= spawn_interval:
                     start_new_wave()
                     spawn_timer = 0
